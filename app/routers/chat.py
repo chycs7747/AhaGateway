@@ -1,12 +1,16 @@
 import json
+
 import httpx
+from docker.errors import NotFound
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from app.config import VLLM_MODEL
 from app.schemas import ChatRequest, ChatResponse
+from app.services.vllm_manager import UnknownModelError, VllmManager
+
 
 router = APIRouter(tags=["chat"])
+
 
 def split_thinking(message: dict) -> tuple[str, str | None]:
     """vLLM 응답 message에서 (content, thinking)을 분리한다.
@@ -23,9 +27,10 @@ def split_thinking(message: dict) -> tuple[str, str | None]:
         content = content.strip()
     return content, thinking
 
-def build_payload(req: ChatRequest, stream: bool = False) -> dict:
+
+def build_payload(req: ChatRequest, served_name: str, stream: bool = False) -> dict:
     return {
-        "model": VLLM_MODEL,
+        "model": served_name,
         "messages": [m.model_dump() for m in req.messages],
         "temperature": req.temperature,
         "max_tokens": req.max_tokens,
@@ -33,21 +38,51 @@ def build_payload(req: ChatRequest, stream: bool = False) -> dict:
         "stream": stream,
     }
 
+
 def sse_event(obj: dict) -> str:
     """dict 하나를 SSE 이벤트 한 개로 포장한다."""
     return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
 
 
+
+async def resolve_model(req: ChatRequest, manager: VllmManager) -> str:
+    """요청이 원하는 모델의 served_name을 반환. 필요하면 모델을 전환한다.
+
+    - model 지정 시: ensure()로 전환·준비까지 대기 (요청 주도 전환)
+    - 미지정 시: 지금 떠 있는 모델 사용 (없으면 503)
+    """
+    if req.model is not None:
+        try:
+            ready = await manager.ensure(req.model, wait_ready=True)
+        except UnknownModelError:
+            raise HTTPException(status_code=404, detail=f"등록되지 않은 모델: {req.model}")
+        except NotFound as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        if not ready:
+            raise HTTPException(status_code=503, detail=f"모델 준비 시간 초과: {req.model}")
+        return manager.models[req.model]["served_name"]
+
+    active = await manager.active()
+    if active is None:
+        raise HTTPException(
+            status_code=503,
+            detail="로드된 모델이 없습니다. 요청에 model을 지정하거나 /model/load를 호출하세요",
+        )
+    return manager.models[active]["served_name"]
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, request: Request):
-    payload = build_payload(req)
-    
+    manager: VllmManager = request.app.state.vllm_manager
+    served_name = await resolve_model(req, manager)
+    payload = build_payload(req, served_name)
+
     client: httpx.AsyncClient = request.app.state.vllm_client
     try:
         resp = await client.post("/chat/completions", json=payload)
     except httpx.ConnectError:
-        raise HTTPException(status_code=503, detail="vLLM 서버에 연결할 수 없습니다 (모델 언로드 상태일 수 있음)")
-    
+        raise HTTPException(status_code=503, detail="vLLM 서버에 연결할 수 없습니다")
+
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail=f"vLLM 오류: {resp.text}")
 
@@ -61,10 +96,13 @@ async def chat(req: ChatRequest, request: Request):
         usage=data.get("usage"),
     )
 
+
 @router.post("/chat/stream")
 async def chat_stream(req: ChatRequest, request: Request):
+    manager: VllmManager = request.app.state.vllm_manager
+    served_name = await resolve_model(req, manager)  # 스트림 시작 전 — 아직 HTTPException 가능
+    payload = build_payload(req, served_name, stream=True)
     client: httpx.AsyncClient = request.app.state.vllm_client
-    payload = build_payload(req, stream=True)
 
     async def event_stream():
         try:

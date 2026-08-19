@@ -15,7 +15,9 @@ async def lifespan(app: FastAPI):
         base_url=config.VLLM_BASE_URL,
         timeout=httpx.Timeout(config.VLLM_TIMEOUT, connect=config.VLLM_CONNECT_TIMEOUT),
     )
-    app.state.vllm_manager = VllmManager(config.VLLM_CONTAINER, app.state.vllm_client)
+    app.state.vllm_manager = VllmManager(
+        config.MODELS, app.state.vllm_client, ready_timeout=config.MODEL_READY_TIMEOUT
+    )
     yield
     # 종료: 열린 연결 정리
     await app.state.vllm_client.aclose()
