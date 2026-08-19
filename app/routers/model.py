@@ -20,7 +20,7 @@ async def _model_info(manager: VllmManager, name: str) -> ModelInfo:
         container=manager.models[name]["container"],
         status=status,
         active=active,
-        ready=await manager.is_ready() if active else None,
+        ready=await manager.is_ready(manager.models[name]["served_name"]) if active else None,
     )
 
 
