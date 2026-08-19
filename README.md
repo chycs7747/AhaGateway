@@ -79,7 +79,7 @@ Inference is 100% vLLM's job; the gateway only controls Docker and relays HTTP.
 ```
 app/
 ├── main.py               # app assembly: FastAPI instance, lifespan, routers
-├── config.py             # vLLM address, container name, timeouts
+├── config.py             # your local setup (copy of config.example.py, git-ignored)
 ├── schemas.py            # Pydantic request/response models
 ├── routers/
 │   ├── chat.py           # POST /chat — relay + thinking separation
@@ -100,16 +100,12 @@ app/
 git clone https://github.com/chycs7747/AhaGateway && cd AhaGateway
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+cp app/config.example.py app/config.py   # then edit with your own values
 fastapi dev app/main.py --port 9000
 ```
 
-Point `app/config.py` at your setup:
-
-```python
-VLLM_BASE_URL = "http://localhost:8078/v1"
-VLLM_MODEL = "qwen38-nvfp4"
-VLLM_CONTAINER = "qwen38"
-```
+`app/config.py` is git-ignored — your endpoints, container names, and model
+paths stay on your machine. See `app/config.example.py` for what to fill in.
 
 Then try it:
 
