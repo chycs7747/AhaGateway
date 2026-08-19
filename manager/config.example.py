@@ -1,18 +1,23 @@
-# AhaGateway settings — template.
-#
-# Copy this file to app/config.py and fill in your own values.
-# app/config.py is git-ignored so your local paths and names stay private.
+# Manager settings — template. Copy to manager/config.py and fill in your values.
+# manager/config.py is git-ignored so your local paths and names stay private.
 
-# Base URL of the vLLM OpenAI-compatible API. All model containers share
-# this port: the GPU fits one model at a time, so whichever container is
-# running owns the port. The manager enforces that exclusivity.
+# The vLLM OpenAI-compatible API on THIS machine. All model containers share
+# this port: the GPU fits one model at a time; the manager enforces that.
 VLLM_BASE_URL = "http://localhost:8000/v1"
 
-VLLM_TIMEOUT = 120.0        # total wait for a completion (seconds)
-VLLM_CONNECT_TIMEOUT = 5.0  # connection establishment limit (seconds)
+# ---- time constants: each one measures a different thing ----
 
-# How long ensure() waits for a model to finish loading (seconds).
+# [loading] how long a switch waits for the new model to become ready.
+# Raise this for bigger models (8-10 min load times).
 MODEL_READY_TIMEOUT = 600.0
+
+# [drain] how long a switch/unload waits for in-flight inference to finish.
+# Unrelated to model size — it measures other requests' generation time.
+# Keep it larger than the gateway's per-request VLLM_TIMEOUT.
+SWITCH_DRAIN_TIMEOUT = 180.0
+
+# [ghost sessions] unreleased sessions (dead clients) expire after this.
+SESSION_TTL = 1800.0
 
 VLLM_IMAGE = "vllm/vllm-openai:latest"
 
@@ -20,8 +25,7 @@ VLLM_IMAGE = "vllm/vllm-openai:latest"
 #   container:   docker container name
 #   served_name: vLLM --served-model-name (the "model" field sent to vLLM)
 #   spec:        how to CREATE the container if it does not exist.
-#                None = the container is managed outside the gateway
-#                (pre-created by hand), we only start/stop it.
+#                None = pre-created by hand; we only start/stop it.
 MODELS = {
     "your-model": {
         "container": "your-model-container",
