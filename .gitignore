@@ -10,7 +10,6 @@ __pycache__/
 CLAUDE.md
 
 # Personal environment config (commit config.example.py instead)
-app/config.py
 manager/config.py
 gateway/config.py
 study.md
