@@ -1,5 +1,5 @@
 import asyncio
-
+import httpx
 import docker
 from docker.errors import NotFound
 
@@ -12,9 +12,10 @@ class VllmManager:
     공개 메서드는 asyncio.to_thread로 동기 구현을 별도 스레드에서 돌린다.
     """
 
-    def __init__(self, container_name: str):
+    def __init__(self, container_name: str, http_client: httpx.AsyncClient):
         self.container_name = container_name
         self._docker = docker.from_env()
+        self._http = http_client
 
     # ---- 동기 구현부 ----
 
@@ -47,3 +48,15 @@ class VllmManager:
 
     async def stop(self) -> str:
         return await asyncio.to_thread(self._stop)
+
+    async def is_ready(self) -> bool:
+        """vLLM 엔진이 실제로 요청을 받을 수 있는 상태인지 확인.
+
+        컨테이너가 running이어도 모델을 GPU에 올리는 몇 분간은
+        API 포트가 안 열려 있다. /models에 짧은 핑으로 판별한다.
+        """
+        try:
+            resp = await self._http.get("/models", timeout=2.0)
+        except httpx.HTTPError:
+            return False
+        return resp.status_code == 200

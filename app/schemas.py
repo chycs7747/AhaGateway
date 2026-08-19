@@ -25,3 +25,4 @@ class ChatResponse(BaseModel):
 class ModelStatusResponse(BaseModel):
     container: str
     status: str
+    ready: bool
