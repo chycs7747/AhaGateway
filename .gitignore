@@ -1,0 +1,10 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets / local environment
+.env
+
+# Local-only project context
+CLAUDE.md
