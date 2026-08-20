@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 import httpx
@@ -38,10 +39,15 @@ class ManagerClient:
         try:
             yield data
         finally:
+            # 클라이언트가 스트림 도중 끊기면 이 태스크는 '취소 중'이라, 여기서 그냥
+            # await하면 DELETE 자체가 취소돼 세션이 샌다. shield로 반납을 끝까지 보낸다.
+            release = asyncio.shield(
+                self._http.delete(f"/sessions/{data['session_id']}", timeout=5.0)
+            )
             try:
-                await self._http.delete(f"/sessions/{data['session_id']}", timeout=5.0)
-            except httpx.HTTPError:
-                pass  # 반납 실패 → manager의 SESSION_TTL이 유령 세션을 수습
+                await release
+            except (httpx.HTTPError, asyncio.CancelledError):
+                pass  # shield 덕에 DELETE는 백그라운드에서 완료됨; 실패해도 TTL이 최후 수습
 
     async def proxy(self, method: str, path: str, json: dict | None = None) -> httpx.Response:
         """관리 API(/models, /model/*)를 그대로 중계하기 위한 통로."""
