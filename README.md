@@ -28,9 +28,9 @@ needed, and holding the request until the new model is ready. Responses come
 back in a clean, minimal schema with the model's reasoning (`thinking`)
 already separated from the final answer.
 
-Companion project: [AhaCode](https://github.com/chycs7747/AhaCode), a
-terminal chat client that can talk to this gateway (or any OpenAI-compatible
-endpoint).
+Any OpenAI-compatible client works unmodified: point it at
+`http://<gateway>:9000/v1` and use registry names as model ids — switching
+models from the client swaps containers on the GPU box.
 
 ## API
 
@@ -44,6 +44,13 @@ The gateway (`:9000`) is the single public door:
 | `POST` | `/model/unload` | Stop the active model, free the GPU |
 | `POST` | `/chat` | Relay a conversation to vLLM |
 | `POST` | `/chat/stream` | Same, but streamed as SSE events |
+| `GET` | `/v1/models` | OpenAI-compatible model list (ids = registry names) |
+| `POST` | `/v1/chat/completions` | OpenAI-compatible chat, streaming included — for SDKs and existing clients |
+
+Two lanes, one relay: `/chat` is the gateway's own narrow schema; `/v1/*`
+passes the OpenAI surface through untouched (only the `model` field is
+rewritten to the served name) so any OpenAI client works by changing
+`base_url`. Both ride the same session and model-switching machinery.
 
 `POST /chat` takes a deliberately small request — not the full OpenAI surface.
 Name a model and the gateway switches to it first (the request just takes
@@ -112,8 +119,9 @@ gateway/                              manager/
 ├── schemas.py                        ├── schemas.py
 ├── manager_client.py                 ├── vllm_manager.py   # docker SDK, registry,
 └── routers/                          │                     # sessions, drain
-    ├── chat.py                       └── routers/
-    └── model.py   # proxy                └── model.py      # admin + session API
+    ├── chat.py          # own lane   └── routers/
+    ├── openai_compat.py # /v1 lane       └── model.py      # admin + session API
+    └── model.py         # admin proxy
 ```
 
 ## Requirements
@@ -164,6 +172,14 @@ curl -s -X POST http://localhost:9000/chat \
 - **Switching is request-driven.** Clients never call load/unload in normal
   use — naming a model in `/chat` is enough. The explicit `/model/*` endpoints
   remain as admin handles (warm-up, freeing the GPU).
+- **Two lanes, deliberately different.** The narrow `/chat` lane stays
+  small and stable for clients we write ourselves; new capabilities (tool
+  calling, etc.) land on the `/v1` lane, which is kept a faithful
+  passthrough so the OpenAI ecosystem keeps working unmodified.
+- **Session release survives cancellation.** A client that disconnects
+  mid-stream cancels the relay task; the session release is wrapped in
+  `asyncio.shield` so the manager still gets told, and a TTL on the manager
+  side is the backstop if it doesn't.
 - **In-flight requests are never killed by a swap.** Each inference holds a
   session; switches drain open sessions first (bounded by a drain timeout —
   the switcher gets a `503` rather than killing someone's generation).
