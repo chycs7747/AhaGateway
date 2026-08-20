@@ -5,7 +5,7 @@ from fastapi import FastAPI
 
 from gateway import config
 from gateway.manager_client import ManagerClient
-from gateway.routers import chat, model
+from gateway.routers import chat, model, openai_compat
 
 
 @asynccontextmanager
@@ -30,6 +30,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="AhaGateway", lifespan=lifespan)
 app.include_router(chat.router)
 app.include_router(model.router)
+app.include_router(openai_compat.router)
 
 
 @app.get("/health")
