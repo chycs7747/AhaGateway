@@ -1,8 +1,9 @@
+import os
 # Gateway settings — template. Copy to gateway/config.py and fill in your values.
 # gateway/config.py is git-ignored.
 
 # Where the manager service runs (internal traffic).
-MANAGER_BASE_URL = "http://localhost:9100"
+MANAGER_BASE_URL = os.environ.get("MANAGER_BASE_URL", "http://localhost:9100")
 
 # [one inference] how long to wait for a completion — 504 to the client beyond this.
 VLLM_TIMEOUT = 120.0

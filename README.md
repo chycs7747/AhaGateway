@@ -137,6 +137,13 @@ fastapi dev manager/main.py --port 9100
 fastapi dev gateway/main.py --port 9000
 ```
 
+Or run both as containers (host networking; the manager gets the Docker
+socket so it can start/stop vLLM containers; survives reboots):
+
+```bash
+docker compose up -d --build
+```
+
 Both `config.py` files are git-ignored — your endpoints, container names, and
 model paths stay on your machine.
 

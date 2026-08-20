@@ -1,9 +1,10 @@
+import os
 # Manager settings — template. Copy to manager/config.py and fill in your values.
 # manager/config.py is git-ignored so your local paths and names stay private.
 
 # The vLLM OpenAI-compatible API on THIS machine. All model containers share
 # this port: the GPU fits one model at a time; the manager enforces that.
-VLLM_BASE_URL = "http://localhost:8000/v1"
+VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "http://localhost:8000/v1")
 
 # ---- time constants: each one measures a different thing ----
 

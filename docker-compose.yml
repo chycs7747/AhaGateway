@@ -1,0 +1,24 @@
+# 두 서비스 모두 host 네트워크 사용 — vLLM(:8078)과 같은 위치라 주소가 전부
+# localhost로 통일되고, 방화벽 예외가 필요 없다. manager(:9100)는 호스트에
+# 바인딩되지만 ufw 기본 거부가 외부 접근을 막는다 (localhost는 통과).
+services:
+  manager:
+    build:
+      context: .
+      dockerfile: manager/Dockerfile
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./manager/config.py:/app/manager/config.py:ro
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      - manager
+    volumes:
+      - ./gateway/config.py:/app/gateway/config.py:ro

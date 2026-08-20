@@ -1,0 +1,8 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+study.md
+CLAUDE.md
+manager/config.py
+gateway/config.py
